@@ -86,6 +86,7 @@ def YesOrNoQuestion(parse):
 
 def get_property(question, entity):
 	prop = []
+	last_word = ""
 	possible_prop = []
 	before_ent = []
 	after_ent = []
@@ -101,33 +102,49 @@ def get_property(question, entity):
 				num_ent = num_ent - 1
 				entity.pop(0)
 	
+	print (before_ent)
+	print (after_ent)
+	
+	
 	for word in before_ent:
 		if det_found == True:
-			if word.tag_ == "NNS":
-				prop.append(word.lemma_)
-			else:
+			if word.pos_ == "NOUN":
+				while possible_prop:
+					prop.append(possible_prop.pop(0))
 				prop.append(word.text)
+				last_word = word
+			else:
+				possible_prop.append(word.text)
 		if word.pos_ == "DET":
-			det_found = True		
-		
-	if det_found == True:
-		while prop[-1] != "of":
-			prop.pop()
-		prop.pop()
+			det_found = True
+	
+	if prop:
+		if last_word.tag_ == "NNS":
+			prop[-1] = last_word.lemma_
 		return prop
 	else:
+		det_found = False
 		for word in after_ent:
 			if det_found == True:
-				if word.tag_ == "NNS":
-					prop.append(word.lemma_)
-				else:
+				if word.pos_ == "NOUN":
+					while possible_prop:
+						prop.append(possible_prop.pop(0))
 					prop.append(word.text)
+					last_word = word
+				else:
+					possible_prop.append(word.text)
 			if word.pos_ == "DET":
 				det_found = True
-				
-	while prop[-1] != "of":
-		prop.pop()
-	return prop
+		
+		if not prop:
+			return prop
+		else:
+			if last_word.tag_ == "NNS":
+				prop[-1] = last_word.lemma_
+			prop.append("of")
+			return prop
+	
+	
 	
 
 def get_entity(question):
@@ -155,13 +172,18 @@ def create_and_fire_query(question):
 	
 	
 	entity = get_entity(question)
+	if not entity: # if entity is empty, cannot find answer
+		return 0
 	paramsQ['search'] = " ".join(entity)
 	json = requests.get(url, paramsQ).json()
-	
-	
+	if not json['search']: # if the search of entity is empty, it cannot find answer
+		return 0
 	for result in json['search']:
 		q_id = format(result['id'])
 		prop = get_property(question, entity)
+		if not prop: # if property is empty, cannot find answer
+			return 0
+		print(prop)
 		paramsP['search'] = " ".join(prop)
 		json = requests.get(url, paramsP).json()
 		for result in json['search']:
