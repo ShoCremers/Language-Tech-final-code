@@ -29,22 +29,6 @@ def create_query_YesNO(prop, entity):
 	
 
 
-def selectQuestion (parse):
-	for token in parse:
-		print("\t".join((token.text, token.lemma_, token.pos_, token.tag_, token.dep_, token.head.lemma_)))
-
-	yesWords = ["can", "could", "would", "is", "does", "has", "was", "were", "had", "have", "did", "are", "will",'be']
-	questionWords = ["who", "what", "where", "when", "why", "how", "whose", "which", "whom"]
-	
-	for token in parse:
-		if token.lemma_ in yesWords: #check if this is a simple YesOrNo question 
-			print('Yes or No question')
-			return 1
-		else:
-			print('other type of question')
-			return 2
-
-
 def YesOrNoQuestion(parse):
 	wordQ = "none"
 	wordP = [] 
@@ -83,8 +67,83 @@ def YesOrNoQuestion(parse):
 			break 
 
 
+def get_property_W_prn(question, entity):
+	prop = []
+	possible_prop = []
+	verb_found = False
+	num_ent = len(entity)
+	verb_count = 0
+	last_verb = ''
+	for word in question:
+		if word.pos_ == "VERB":
+			verb_count += 1
+			last_verb = word.lemma_
+		
+	if verb_count == 1 and last_verb == "be":
+		for word in question:
+			if verb_found == True:
+				if num_ent > 0:
+					if word.text == entity[0]:
+						num_ent -= 1
+						entity.pop()
+						continue
+				if word.tag_ == "WDT" or word.tag_ == "WP" or word.tag_ == "WP$":
+					verb_found = False
+					break
+				elif word.pos_ == "NOUN":
+					print("noun")
+					while possible_prop:
+						prop.append(possible_prop.pop(0))
+					prop.append(word.lemma_)
+				elif word.pos_ == "VERB" or word.pos_ == "ADJ" or word.pos_ == "ADV" or word.pos_ == "ADP":
+					possible_prop.append(word.text)
+				elif word.pos_ == "DET":
+					if prop or possible_prop:
+						possible_prop.append(word.text)
+			elif word.pos_ == "VERB":
+				verb_found = True
+	
+	elif verb_count > 1:
+		if last_verb == "found" or last_verb == "form":
+			prop.append("inception")
+		if last_verb == "locate" or last_verb == "situate":
+			prop.append("located in the administrative territorial entity")
+	
+	print(verb_found)
+	print(prop)
+	return prop
 
-def get_property(question, entity):
+def get_property_W_det(question, entity):
+	prop = []
+	possible_prop = []
+	noun_found = False
+	for word in question:
+		if noun_found == True:
+			if word.pos_ == "VERB":
+				noun_found = False
+				break
+			elif word.pos_ == "NOUN":
+				while possible_prop:
+					prop.append(possible_prop.pop(0))
+				prop.append(word.lemma_)
+			else:
+				possible_prop.append(word.text)
+				
+		elif word.tag_ == "WDT":
+			noun_found = True
+			noun = word.head.pos_
+				
+		elif (word.tag_ == "WP" or word.tag_ == "WP$") and word.head.pos_ == "NOUN":
+			noun_found = True
+			noun = word.head.pos_
+	
+	if not prop:
+		return get_property_W_prn(question, entity)
+	else:
+		return prop
+
+
+def get_property_state(question, entity):
 	prop = []
 	last_word = ""
 	possible_prop = []
@@ -159,19 +218,24 @@ def get_entity(question):
 				while possible_entity:
 					entity.append(possible_entity.pop(0))
 				entity.append(word.text)
-			else:
+			elif word.head.pos_ == "PROPN":
 				possible_entity.append(word.text)
+			else:
+				break
 	return entity
 			
 
 
-def create_and_fire_query(question):
+def create_and_fire_query(question, question_type):
 	url = 'https://www.wikidata.org/w/api.php'
 	paramsQ = {'action': 'wbsearchentities', 'language': 'en', 'format': 'json'}
 	paramsP = {'action': 'wbsearchentities', 'language': 'en', 'format': 'json', 'type': 'property',}
 	
 	
 	entity = get_entity(question)
+	prop = []
+	answer_found = 0
+	print(entity)
 	if not entity: # if entity is empty, cannot find answer
 		return 0
 	paramsQ['search'] = " ".join(entity)
@@ -180,26 +244,55 @@ def create_and_fire_query(question):
 		return 0
 	for result in json['search']:
 		q_id = format(result['id'])
-		prop = get_property(question, entity)
+		if question_type == 4:
+			prop = get_property_W_prn(question, entity)
+		elif question_type == 3:
+			prop = get_property_W_det(question, entity)
+		elif question_type == 2:
+			prop = get_property_state(question, entity) # try with question type 2 if 3 didnt work
 		if not prop: # if property is empty, cannot find answer
 			return 0
 		print(prop)
 		paramsP['search'] = " ".join(prop)
 		json = requests.get(url, paramsP).json()
+		print(json['search'])
 		for result in json['search']:
 			p_id = format(result['id'])
 			query = create_query(p_id, q_id)
-			return print_answer(query)
+			answer_found = print_answer(query)
+			if answer_found == 1:
+				break
+			if question_type == 3 and answer_found == 0:
+				print("Im in loop")
+				return create_and_fire_query(question, 4)
+		return answer_found
 	
 
 def QA(line): 
-	ques_type = selectQuestion(line) # question type is selected, returns 1, 2 
+	for token in line:
+		print("\t".join((token.text, token.lemma_, token.pos_, token.tag_, token.dep_, token.head.lemma_)))
+
+	yes_words = ["can", "could", "would", "is", "does", "has", "was", "were", "had", "have", "did", "are", "will",'be']
+	state_words = ["state", "name", "list", "report"]
+	wh_det_words = ["what","which"]
+	wh_prn_words = ["who", "where", "when"]
+	question_words = ["who", "what", "where", "when", "why", "how", "whose", "which", "whom"]
 	
-	if ques_type == 1: #yes or no question 
-		YesOrNoQuestion(line)
-		return 1 
-	else: 
-		return create_and_fire_query(line) # what is the X of Y 
+	
+	if line[0].lemma_ == "do" or line[0].lemma_ == "be" or line[0].lemma_ == "can":
+		print('Yes or No question')
+		return YesOrNoQuestion(line) #yes or no question 
+	else:
+		for token in line:
+			if token.lemma_ in state_words and token.pos_ != "PROPN":
+				print('State question')
+				return create_and_fire_query(line, 2) # state the X of Y
+			elif token.lemma_ in wh_det_words:
+				print('Wh determiner question')
+				return create_and_fire_query(line, 3) # which city is the X of Y
+			elif token.lemma_ in wh_prn_words:
+				print('Wh pronoun question')
+				return create_and_fire_query(line, 4) # where is the X of Y
 			
 
 def main(argv):
