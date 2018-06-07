@@ -12,6 +12,24 @@ def print_answer(query):
 		for var in item :
 			print(item[var]['value'])
 	return flag
+	
+def print_answer_count(query):
+	answer = ''
+	count = 0
+	url = 'https://query.wikidata.org/sparql'
+	data = requests.get(url, params={'query': query, 'format': 'json'}).json()
+	flag = 0
+	for item in data['results']['bindings']:
+		flag = 1
+		for var in item :
+			count += 1
+			answer = item[var]['value']
+			print(item[var]['value'])
+	if count == 1 and answer.isdigit():
+		print(answer)
+	elif answer:
+		print(count)
+	return flag
 
 def print_ans_YesNO (query):
 	url_spqrql = 'https://query.wikidata.org/sparql'
@@ -67,6 +85,50 @@ def YesOrNoQuestion(parse):
 			break 
 
 
+def get_property_how(question, entity):
+	area = ["big", "large", "small"]
+	height = ["tall", "big", "high", "low", "short", "far"]
+	length = ["long", "short"]
+	depth = ["deep"]
+	width = ["wide"]
+	prop = []
+	head = ''
+	head_found = False
+
+
+	for word in question:
+		if word.lemma_ == "how":
+			head = word.head
+			if head.lemma_ in area:
+				prop.append("area")
+			elif head.lemma_ in height:
+				prop.append("height")
+			elif head.lemma_ in length:
+				prop.append("length")
+			elif head.lemma_ in depth:
+				prop.append("vertical")
+			elif head.lemma_ in width:
+				prop.append("width")
+			break
+	
+	if not prop:
+		prop = get_property_state(question, entity)
+		
+	if not prop:
+		for word in question:
+			if word.text == head:
+				head_found = True
+			if head_found == True:
+				if word.pos_ == "VERB":
+					head_found = False
+					break
+				else:
+					prop.append(word)
+			
+	return prop
+	
+	
+
 def get_property_W_prn(question, entity):
 	prop = []
 	possible_prop = []
@@ -108,6 +170,9 @@ def get_property_W_prn(question, entity):
 			prop.append("inception")
 		if last_verb == "locate" or last_verb == "situate":
 			prop.append("located in the administrative territorial entity")
+	
+	if not prop:
+		prop.append(last_verb)
 	
 	print(verb_found)
 	print(prop)
@@ -203,7 +268,27 @@ def get_property_state(question, entity):
 			prop.append("of")
 			return prop
 	
-	
+def get_property_count(question, entity):
+	prop = []
+	possible_prop = []
+	noun_found = False
+	for word in question:
+		if noun_found == True:
+			if word.pos_ == "VERB":
+				noun_found = False
+				break
+			elif word.pos_ == "NOUN":
+				while possible_prop:
+					prop.append(possible_prop.pop(0))
+				prop.append(word.lemma_)
+			else:
+				possible_prop.append(word.text)
+				
+		elif word.lemma_ == "many":
+			noun_found = True
+			noun = word.head.pos_
+
+	return prop	
 	
 
 def get_entity(question):
@@ -244,12 +329,20 @@ def create_and_fire_query(question, question_type):
 		return 0
 	for result in json['search']:
 		q_id = format(result['id'])
-		if question_type == 4:
+		
+		if question_type == 6:
+			prop = get_property_how(question, entity)
+		elif question_type == 5:
+			prop = get_property_count(question, entity)
+		elif question_type == 4:
 			prop = get_property_W_prn(question, entity)
 		elif question_type == 3:
 			prop = get_property_W_det(question, entity)
 		elif question_type == 2:
-			prop = get_property_state(question, entity) # try with question type 2 if 3 didnt work
+			prop = get_property_state(question, entity) 
+			
+			
+			
 		if not prop: # if property is empty, cannot find answer
 			return 0
 		print(prop)
@@ -259,7 +352,10 @@ def create_and_fire_query(question, question_type):
 		for result in json['search']:
 			p_id = format(result['id'])
 			query = create_query(p_id, q_id)
-			answer_found = print_answer(query)
+			if question_type == 5:
+				answer_found = print_answer_count(query)
+			else:
+				answer_found = print_answer(query)
 			if answer_found == 1:
 				break
 			if question_type == 3 and answer_found == 0:
@@ -272,14 +368,15 @@ def QA(line):
 	for token in line:
 		print("\t".join((token.text, token.lemma_, token.pos_, token.tag_, token.dep_, token.head.lemma_)))
 
-	yes_words = ["can", "could", "would", "is", "does", "has", "was", "were", "had", "have", "did", "are", "will",'be']
+	yes_words = ["can","be", "do"]
+	h_words = ["how"]
 	state_words = ["state", "name", "list", "report"]
 	wh_det_words = ["what","which"]
 	wh_prn_words = ["who", "where", "when"]
 	question_words = ["who", "what", "where", "when", "why", "how", "whose", "which", "whom"]
 	
 	
-	if line[0].lemma_ == "do" or line[0].lemma_ == "be" or line[0].lemma_ == "can":
+	if line[0].lemma_ in yes_words:
 		print('Yes or No question')
 		return YesOrNoQuestion(line) #yes or no question 
 	else:
@@ -293,6 +390,14 @@ def QA(line):
 			elif token.lemma_ in wh_prn_words:
 				print('Wh pronoun question')
 				return create_and_fire_query(line, 4) # where is the X of Y
+			elif token.lemma_ in h_words:
+				if token.head.lemma_ == "many":
+					print('Count question')
+					return create_and_fire_query(line, 5)
+				else:
+					print('How question')
+					return create_and_fire_query(line, 6)
+	
 			
 
 def main(argv):
@@ -314,6 +419,7 @@ def main(argv):
 	for line in sys.stdin:
 		line = line.rstrip()
 		nlp = spacy.load('en')
+		#nlp = spacy.load('en_core_web_md')
 		if QA(nlp(line)) == 0:
 			print("We could not find the answer")
 		print("Ask another question.")
