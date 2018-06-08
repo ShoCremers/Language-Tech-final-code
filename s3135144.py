@@ -196,7 +196,7 @@ def get_property_W_det(question, entity):
 			else:
 				possible_prop.append(word.text)
 				
-		elif word.pos_ == "ADJ":
+		elif word.tag_ == "WDT":
 			noun_found = True
 				
 		elif (word.tag_ == "WP" or word.tag_ == "WP$") and word.head.pos_ == "NOUN": # what ... is ... questions
@@ -269,7 +269,27 @@ def get_property_state(question, entity):
 			prop.append("of")
 			return prop
 	
-	
+def get_property_count(question, entity):
+	prop = []
+	possible_prop = []
+	noun_found = False
+	for word in question:
+		if noun_found == True:
+			if word.pos_ == "VERB":
+				noun_found = False
+				break
+			elif word.pos_ == "NOUN":
+				while possible_prop:
+					prop.append(possible_prop.pop(0))
+				prop.append(word.lemma_)
+			else:
+				possible_prop.append(word.text)
+				
+		elif word.lemma_ == "many":
+			noun_found = True
+			noun = word.head.pos_
+
+	return prop	
 
 def get_entity(question): # find the pronoun from the sentence
 	entity = []
@@ -312,11 +332,11 @@ def create_and_fire_query(question, question_type):
 		
 		if question_type == 6:
 			prop = get_property_how(question, entity)
-		#elif question_type == 5:
-			#prop = get_property_count(question, entity)
+		if question_type == 5:
+			prop = get_property_count(question, entity)
 		elif question_type == 4:
 			prop = get_property_W_prn(question, entity)
-		elif question_type == 3 or question_type == 5:
+		elif question_type == 3:
 			prop = get_property_W_det(question, entity)
 		elif question_type == 2:
 			prop = get_property_state(question, entity) 
@@ -399,7 +419,6 @@ def main(argv):
 	for line in sys.stdin:
 		line = line.rstrip()
 		nlp = spacy.load('en')
-		#nlp = spacy.load('en_core_web_md')
 		if QA(nlp(line)) == 0:
 			print("We could not find the answer")
 		print("Ask another question.")
