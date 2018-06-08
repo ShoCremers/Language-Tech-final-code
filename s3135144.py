@@ -1,7 +1,9 @@
+# written by Kenichi Furursawa (s3204146), Sho Cremers (s3135144), and Sukhleen Kaur (s3157423)
 import requests
 import sys
 import re
 import spacy
+from yes_or_no import *
 
 def print_answer(query):
 	url = 'https://query.wikidata.org/sparql'
@@ -31,59 +33,12 @@ def print_answer_count(query):
 		print(count)
 	return flag
 
-def print_ans_YesNO (query):
-	url_spqrql = 'https://query.wikidata.org/sparql'
-	data = requests.get(url_spqrql, params={'query': query,'format': 'json'}).json()
-	return data['boolean']
+
 
 def create_query(prop, entity):
 	query = 'SELECT DISTINCT ?answerLabel WHERE{ wd:%s wdt:%s ?answer. SERVICE wikibase:label{ bd:serviceParam wikibase:language "en".}}' % (entity, prop)
 	return query 
 	
-	
-def create_query_YesNO(prop, entity):
-	query = 'ASK { wd:%s wdt:P31 wd:%s . SERVICE wikibase:label{ bd:serviceParam wikibase:language "en".}}' % (prop, entity)
-	return query 
-	
-
-
-def YesOrNoQuestion(parse):
-	wordQ = "none"
-	wordP = [] 
-
-	for ent in parse.ents: 
-		wordQ = ent.text
-	
-	for token in parse: 
-		if token.tag_ =="NN": 
-			wordP.append(token.text)
-			print(token.text)
-	
-	url = 'https://www.wikidata.org/w/api.php'
-	paramsQ = {'action': 'wbsearchentities', 'language': 'en',
-               'format': 'json'}
- 
-	P = ' '.join(wordP) #make list into string 
-	
-	paramsQ['search'] =P
-	jsonP = requests.get(url, paramsQ).json()
-	
-	for result in jsonP['search']:
-		q_id = format(result['id'])
-		break 
-	paramsQ['search'] = wordQ
-	jsonQ = requests.get(url, paramsQ).json()
-		
-	for result in jsonQ['search']:
-		p_id = format(result['id'])
-		query = create_query_YesNO(p_id,q_id)
-		if print_ans_YesNO(query): 
-			print('YES')
-			break
-		else:
-			print('NO')
-			break 
-
 
 def get_property_how(question, entity):
 	area = ["big", "large", "small"]
