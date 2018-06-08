@@ -24,10 +24,10 @@ def print_answer_count(query):
 		for var in item :
 			count += 1
 			answer = item[var]['value']
-			print(item[var]['value'])
-	if count == 1 and answer.isdigit():
+			#print(item[var]['value'])
+	if count == 1 and answer.isdigit(): # If there is only one answer and it is a number, most likey the answer (like population)
 		print(answer)
-	elif answer:
+	elif answer: # print the count of answer if there is one.
 		print(count)
 	return flag
 
@@ -95,7 +95,7 @@ def get_property_how(question, entity):
 	head = ''
 	head_found = False
 
-
+	# If the words are from the vocabulary, return the corresponding property
 	for word in question:
 		if word.lemma_ == "how":
 			head = word.head
@@ -111,9 +111,11 @@ def get_property_how(question, entity):
 				prop.append("width")
 			break
 	
+	#try with getting entity like state question 
 	if not prop:
 		prop = get_property_state(question, entity)
 		
+	#try words that comes before the verb
 	if not prop:
 		for word in question:
 			if word.text == head:
@@ -141,25 +143,26 @@ def get_property_W_prn(question, entity):
 			verb_count += 1
 			last_verb = word.lemma_
 		
-	if verb_count == 1 and last_verb == "be":
+	if verb_count == 1 and last_verb == "be": # questions like "when was ..." or "who is ..."
 		for word in question:
 			if verb_found == True:
-				if num_ent > 0:
+				if num_ent > 0: # if the entity has not appeared in the question, check for it
+					# if entity appears, remove so that it doesnt read it as a property by mistake
 					if word.text == entity[0]:
 						num_ent -= 1
 						entity.pop()
 						continue
-				if word.tag_ == "WDT" or word.tag_ == "WP" or word.tag_ == "WP$":
+				if word.tag_ == "WDT" or word.tag_ == "WP" or word.tag_ == "WP$": # if wh words are found, end loop
 					verb_found = False
 					break
-				elif word.pos_ == "NOUN":
-					print("noun")
+				elif word.pos_ == "NOUN": # if noun is found, add the word and previous words that are possibly property to property
+					# print("noun")
 					while possible_prop:
 						prop.append(possible_prop.pop(0))
 					prop.append(word.lemma_)
 				elif word.pos_ == "VERB" or word.pos_ == "ADJ" or word.pos_ == "ADV" or word.pos_ == "ADP":
 					possible_prop.append(word.text)
-				elif word.pos_ == "DET":
+				elif word.pos_ == "DET": # if the word is a determiner and it is not the first determiner of the property, then add it
 					if prop or possible_prop:
 						possible_prop.append(word.text)
 			elif word.pos_ == "VERB":
@@ -174,7 +177,6 @@ def get_property_W_prn(question, entity):
 	if not prop:
 		prop.append(last_verb)
 	
-	print(verb_found)
 	print(prop)
 	return prop
 
@@ -184,25 +186,23 @@ def get_property_W_det(question, entity):
 	noun_found = False
 	for word in question:
 		if noun_found == True:
-			if word.pos_ == "VERB":
+			if word.pos_ == "VERB": #only look at words before the verb
 				noun_found = False
 				break
-			elif word.pos_ == "NOUN":
+			elif word.pos_ == "NOUN": # if noun is found, add the word and previous words that are possibly property to property
 				while possible_prop:
 					prop.append(possible_prop.pop(0))
 				prop.append(word.lemma_)
 			else:
 				possible_prop.append(word.text)
 				
-		elif word.tag_ == "WDT":
+		elif word.pos_ == "ADJ":
 			noun_found = True
-			noun = word.head.pos_
 				
-		elif (word.tag_ == "WP" or word.tag_ == "WP$") and word.head.pos_ == "NOUN":
+		elif (word.tag_ == "WP" or word.tag_ == "WP$") and word.head.pos_ == "NOUN": # what ... is ... questions
 			noun_found = True
-			noun = word.head.pos_
 	
-	if not prop:
+	if not prop: #if it was not what ... is ... questions, then it is what is ... of ... question
 		return get_property_W_prn(question, entity)
 	else:
 		return prop
@@ -216,6 +216,7 @@ def get_property_state(question, entity):
 	after_ent = []
 	num_ent = len(entity)
 	det_found = False
+	# divide the sentence before and after entity
 	for word in question:
 		if num_ent == 0:
 			after_ent.append(word)
@@ -268,30 +269,9 @@ def get_property_state(question, entity):
 			prop.append("of")
 			return prop
 	
-def get_property_count(question, entity):
-	prop = []
-	possible_prop = []
-	noun_found = False
-	for word in question:
-		if noun_found == True:
-			if word.pos_ == "VERB":
-				noun_found = False
-				break
-			elif word.pos_ == "NOUN":
-				while possible_prop:
-					prop.append(possible_prop.pop(0))
-				prop.append(word.lemma_)
-			else:
-				possible_prop.append(word.text)
-				
-		elif word.lemma_ == "many":
-			noun_found = True
-			noun = word.head.pos_
-
-	return prop	
 	
 
-def get_entity(question):
+def get_entity(question): # find the pronoun from the sentence
 	entity = []
 	possible_entity = []
 	NNP_found = False
@@ -332,11 +312,11 @@ def create_and_fire_query(question, question_type):
 		
 		if question_type == 6:
 			prop = get_property_how(question, entity)
-		elif question_type == 5:
-			prop = get_property_count(question, entity)
+		#elif question_type == 5:
+			#prop = get_property_count(question, entity)
 		elif question_type == 4:
 			prop = get_property_W_prn(question, entity)
-		elif question_type == 3:
+		elif question_type == 3 or question_type == 5:
 			prop = get_property_W_det(question, entity)
 		elif question_type == 2:
 			prop = get_property_state(question, entity) 
