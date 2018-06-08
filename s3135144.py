@@ -118,14 +118,14 @@ def get_property_how(question, entity):
 	#try words that comes before the verb
 	if not prop:
 		for word in question:
-			if word.text == head:
+			if word == head:
 				head_found = True
 			if head_found == True:
 				if word.pos_ == "VERB":
 					head_found = False
 					break
 				else:
-					prop.append(word)
+					prop.append(word.text)
 			
 	return prop
 	
@@ -291,6 +291,25 @@ def get_property_count(question, entity):
 
 	return prop	
 
+
+def get_entity_backup(question):
+	entity = []
+	last_noun = ''
+	for word in question:
+		if word.pos_ == "NOUN":
+			last_noun = word.text
+		
+	for word in question:
+		if word.head.text == last_noun:
+			if word.pos_ != "DET" or word.pos_ != "VERB":
+				entity.append(word.text)
+		elif word.text == last_noun:
+			entity.append(word.text)
+			break
+		
+	return entity
+
+
 def get_entity(question): # find the pronoun from the sentence
 	entity = []
 	possible_entity = []
@@ -307,8 +326,10 @@ def get_entity(question): # find the pronoun from the sentence
 				possible_entity.append(word.text)
 			else:
 				break
-	return entity
-			
+	if entity:
+		return entity
+	else:
+		return get_entity_backup(question)
 
 
 def create_and_fire_query(question, question_type):
