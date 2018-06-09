@@ -6,80 +6,115 @@ import spacy
 
 
 def print_ans_YesNO (query):
-    url_spqrql = 'https://query.wikidata.org/sparql'
-    data = requests.get(url_spqrql, params={'query': query,'format': 'json'}).json()
-    return data['boolean']
-
+	url_spqrql = 'https://query.wikidata.org/sparql'
+	data = requests.get(url_spqrql, params={'query': query,'format': 'json'}).json()
+	return data['boolean']
+	
 
 def create_query_YesNO(entity1, prop, entity2):
-    query = 'ASK { wd:%s wdt:%s wd:%s . SERVICE wikibase:label{ bd:serviceParam wikibase:language "en".}}' % (entity1, prop, entity2)
-    return query
+	query = 'ASK { wd:%s wdt:%s wd:%s . SERVICE wikibase:label{ bd:serviceParam wikibase:language "en".}}' % (entity1, prop, entity2)
+	return query
+	
+	
 
-def get_property_yesNo(parse, object):
-    prop = []
-    for t in parse:
-        if (t.dep_ == "attr" or t.pos_ == "NOUN") and (t.dep_ != "dobj" and t.dep_ != "pobj") and t.text != object :
-            for d in t.subtree:
-                if (d.dep_ == "attr" or d.pos_ == "NOUN") and (d.dep_ != "dobj" and d.dep_ != "pobj"):
-                    prop.append(d.text)
-                    print("APPENDED PROPERTY LIST = ", d.text)
-        if not prop :
-            if t.dep_ == "prep":
-                prop.append(t.text)
+	
+def get_property_yesNo(parse, subj, obj):
+	prop = []
+	last_word = ''
+	for t in parse:
+		if t.text not in subj and t.text not in obj:
+			if t.pos_ == "NOUN" or t.pos_ == "ADJ" or t.pos_ == "ADV" or (t.pos_ == "VERB" and t != parse[0]):
+				last_word = t.text
+	
+	for t in parse:
+		if t.text not in subj and t.text not in obj:
+			if t.head.pos_ == "NOUN" and t.head.text == last_word and t.pos_ != "DET": 
+				prop.append(t.text)
+			elif t.text == last_word:
+				prop.append(t.text)
+				break
+	
 
-    if prop == object:
-        prop = "instance of"
+	prop = 	' '.join(prop)		
+	if not prop:
+		prop = "instance of"
+		
+		
+	return prop
 
-    return prop
+def get_subject_yes_no(parse):
+	subject = []
+	for word in parse:
+		if word.head.dep_ == "nsubj" and word.pos_ != "DET":
+			subject.append(word.text)
+		elif word.dep_ == "nsubj":
+			subject.append(word.text)
+			break
+	
+	return ' '.join(subject)
+	
 
-
+def get_object_yes_no(parse, subject):
+	obj = ''
+	possible_obj = []
+	for ent in parse.ents:
+		if ent.text != subject:
+			obj = ent.text
+			
+	if not obj:
+		for word in parse:
+			if word.pos_ == "NOUN":
+				last_noun = word.text
+		
+		for word in parse:
+			if word.head.text == last_noun and word.pos_ != "DET":
+				possible_obj.append(word.text)
+			elif word.text == last_noun:
+				possible_obj.append(word.text)
+				break
+				
+		obj = ' '.join(possible_obj)
+	
+	return obj
+	
 def YesOrNoQuestion(parse):
-    wordSubject = "none"
-    wordObject = []
-    url = 'https://www.wikidata.org/w/api.php'
-    paramsQ = {'action': 'wbsearchentities', 'language': 'en',
-               'format': 'json'}
-    paramsP = {'action': 'wbsearchentities', 'language': 'en', 'format': 'json', 'type': 'property',}
+	ans = None
+	wordSubject = "none"
+	wordObject = []
+	url = 'https://www.wikidata.org/w/api.php'
+	paramsQ = {'action': 'wbsearchentities', 'language': 'en','format': 'json'}
+	paramsP = {'action': 'wbsearchentities', 'language': 'en', 'format': 'json', 'type': 'property',}
+	
+	wordSubject = get_subject_yes_no(parse)	
+	paramsQ['search'] = wordSubject
+	jsonSubject = requests.get(url, paramsQ).json()
+	
+	for result in jsonSubject['search']:
+		subject_id = format(result['id'])
+		break
+	
+	wordObject = get_object_yes_no(parse, wordSubject)
+	paramsQ['search'] = wordObject
+	jsonObject = requests.get(url, paramsQ).json()
+		
+	wordProperty = get_property_yesNo(parse, wordSubject, wordObject)
+	paramsP['search'] = wordProperty
+	jsonProperty = requests.get(url,paramsP).json()
 
-    for ent in parse.ents:
-        wordSubject = ent.text
-
-    wordProperty = get_property_yesNo(parse, wordSubject)
-    for token in parse:
-        if token.tag_== "NNP" and token.text != wordSubject and token.text!=wordProperty:
-            wordObject.append(token.text)
-        if token.tag_ =="NN" and token.text!= wordProperty and wordObject==[]:
-            wordObject.append(token.text)
-
-
-    Object = ' '.join(wordObject) #make list into string
-    if wordProperty==wordObject:
-        wordProperty = "instance of"
-
-    paramsP['search'] = wordProperty
-    jsonProperty = requests.get(url,paramsP).json()
-
-    paramsQ['search'] = Object
-    jsonObject = requests.get(url, paramsQ).json()
-
-    for result in jsonObject['search']:
-        subject_id = format(result['id'])
-        break
-    for result in jsonProperty['search']:
-        property_id = format(result['id'])
-        break
-
-    print(wordProperty, wordSubject, wordObject)
-
-    paramsQ['search'] = wordSubject
-    jsonSubject = requests.get(url, paramsQ).json()
-
-    for result in jsonSubject['search']:
-        object_id = format(result['id'])
-        query = create_query_YesNO(object_id,property_id, subject_id)
-        if print_ans_YesNO(query):
-            print('YES')
-            break
-        else:
-            print('NO')
-            break
+	print("subject and property and object: ", wordSubject, wordProperty, wordObject)
+		
+	for result in jsonObject['search']:
+		object_id = format(result['id'])
+		for result in jsonProperty['search']:
+			property_id = format(result['id'])
+			#print("subject, property, object: ", subject_id, property_id, object_id)
+			query = create_query_YesNO(subject_id,property_id, object_id)
+			ans = print_ans_YesNO(query)
+			if ans:
+				print('YES')
+				break
+		if ans:
+			break
+			
+	if not ans:
+		print('NO')

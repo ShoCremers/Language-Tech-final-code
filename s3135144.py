@@ -324,7 +324,7 @@ def create_and_fire_query(question, question_type):
 		print(prop)
 		paramsP['search'] = " ".join(prop)
 		json = requests.get(url, paramsP).json()
-		print(json['search'])
+		#print(json['search'])
 		for result in json['search']:
 			p_id = format(result['id'])
 			query = create_query(p_id, q_id)
@@ -335,7 +335,6 @@ def create_and_fire_query(question, question_type):
 			if answer_found == 1:
 				break
 			if question_type == 3 and answer_found == 0:
-				print("Im in loop")
 				return create_and_fire_query(question, 4)
 		return answer_found
 	
@@ -379,13 +378,13 @@ def QA(line):
 def main(argv):
 	questions = []
 	questions.append('Name the capital of Andaman and Nicobar Islands.')
-	questions.append('What is the currency of France?')
+	questions.append('How many countries does the Nile go through?')
 	questions.append('State the population of Leeuwarden')
 	questions.append('List the timezone of Syria')
 	questions.append('What is the motto of South Africa?')
-	questions.append('What is the internet domain of Antarctica?')
-	questions.append('What is the area of Japan?')
-	questions.append('What are the sister cities of Vancouver?')
+	questions.append('Is Australia a continent?')
+	questions.append('How big is the surface of the Sahara Desert? ')
+	questions.append('Is Yokohama a sister city of Vancouver?')
 	questions.append('Which country is Berlin the capital of?')
 	questions.append('Who is the head of state of the United States of America?')
 	
