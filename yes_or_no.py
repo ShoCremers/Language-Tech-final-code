@@ -10,9 +10,17 @@ def print_ans_YesNO (query):
 	data = requests.get(url_spqrql, params={'query': query,'format': 'json'}).json()
 	return data['boolean']
 	
+def print_answer_no_property(query):
+	url = 'https://query.wikidata.org/sparql'
+	data = requests.get(url, params={'query': query, 'format': 'json'}).json()
+	return data['boolean']
 
 def create_query_YesNO(entity1, prop, entity2):
 	query = 'ASK { wd:%s wdt:%s wd:%s . SERVICE wikibase:label{ bd:serviceParam wikibase:language "en".}}' % (entity1, prop, entity2)
+	return query
+	
+def create_query_YesNO_no_property(entity1, entity2):
+	query = 'ASK { wd:%s ?property wd:%s . SERVICE wikibase:label{ bd:serviceParam wikibase:language "en".}}' % (entity1, entity2)
 	return query
 	
 	
@@ -34,13 +42,7 @@ def get_property_yesNo(parse, subj, obj):
 				prop.append(t.text)
 				break
 	
-
-	prop = 	' '.join(prop)		
-	if not prop:
-		prop = "instance of"
-		
-		
-	return prop
+	return ' '.join(prop)
 
 def get_subject_yes_no(parse):
 	subject = []
@@ -85,9 +87,13 @@ def YesOrNoQuestion(parse):
 	paramsQ = {'action': 'wbsearchentities', 'language': 'en','format': 'json'}
 	paramsP = {'action': 'wbsearchentities', 'language': 'en', 'format': 'json', 'type': 'property',}
 	
-	wordSubject = get_subject_yes_no(parse)	
-	paramsQ['search'] = wordSubject
-	jsonSubject = requests.get(url, paramsQ).json()
+	wordSubject = get_subject_yes_no(parse)
+	if wordSubject:	
+		paramsQ['search'] = wordSubject
+		jsonSubject = requests.get(url, paramsQ).json()
+	else:
+		print ('NO')
+		return 1
 	
 	for result in jsonSubject['search']:
 		subject_id = format(result['id'])
@@ -98,23 +104,38 @@ def YesOrNoQuestion(parse):
 	jsonObject = requests.get(url, paramsQ).json()
 		
 	wordProperty = get_property_yesNo(parse, wordSubject, wordObject)
-	paramsP['search'] = wordProperty
-	jsonProperty = requests.get(url,paramsP).json()
+	if wordProperty:
+		paramsP['search'] = wordProperty
+		jsonProperty = requests.get(url,paramsP).json()
 
-	print("subject and property and object: ", wordSubject, wordProperty, wordObject)
+	#print("subject and property and object: ", wordSubject, wordProperty, wordObject)
 		
 	for result in jsonObject['search']:
 		object_id = format(result['id'])
-		for result in jsonProperty['search']:
-			property_id = format(result['id'])
-			#print("subject, property, object: ", subject_id, property_id, object_id)
-			query = create_query_YesNO(subject_id,property_id, object_id)
-			ans = print_ans_YesNO(query)
+		if not wordProperty:
+			query = create_query_YesNO_no_property(subject_id, object_id)
+			ans = print_answer_no_property(query)
 			if ans:
 				print('YES')
 				break
-		if ans:
-			break
+		else:
+			for result in jsonProperty['search']:
+				property_id = format(result['id'])
+				#print("subject, property, object: ", subject_id, property_id, object_id)
+				query = create_query_YesNO(subject_id,property_id, object_id)
+				ans = print_ans_YesNO(query)
+				if not ans:
+					query = create_query_YesNO(object_id,property_id, subject_id)
+					ans = print_ans_YesNO(query)
+				if ans:
+					print('YES')
+					break
+			if ans:
+				break
 			
 	if not ans:
-		print('NO')
+		print('NO')	
+		
+		
+	return 1
+

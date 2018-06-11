@@ -9,10 +9,13 @@ def print_answer(query):
 	url = 'https://query.wikidata.org/sparql'
 	data = requests.get(url, params={'query': query, 'format': 'json'}).json()
 	flag = 0
+	ans = []
 	for item in data['results']['bindings']:
 		flag = 1
 		for var in item :
-			print(item[var]['value'])
+			ans.append(item[var]['value'])
+	if flag == 1:
+		print ("\t".join(ans))
 	return flag
 	
 def print_answer_count(query):
@@ -32,6 +35,15 @@ def print_answer_count(query):
 	elif answer: # print the count of answer if there is one.
 		print(count)
 	return flag
+
+
+def find_question_number(line):
+	id_num = ''
+	if line[0].isdigit():
+		id_num = line[0]
+		line.pop(0)
+	
+	return id_num
 
 
 
@@ -132,7 +144,6 @@ def get_property_W_prn(question, entity):
 	if not prop:
 		prop.append(last_verb)
 	
-	print(prop)
 	return prop
 
 def get_property_W_det(question, entity):
@@ -181,10 +192,6 @@ def get_property_state(question, entity):
 			elif word.text == entity[0]:
 				num_ent = num_ent - 1
 				entity.pop(0)
-	
-	print (before_ent)
-	print (after_ent)
-	
 	
 	for word in before_ent:
 		if det_found == True:
@@ -256,7 +263,7 @@ def get_entity_backup(question):
 		
 	for word in question:
 		if word.head.text == last_noun:
-			if word.pos_ != "DET" or word.pos_ != "VERB":
+			if word.pos_ != "DET" and word.pos_ != "VERB":
 				entity.append(word.text)
 		elif word.text == last_noun:
 			entity.append(word.text)
@@ -296,7 +303,6 @@ def create_and_fire_query(question, question_type):
 	entity = get_entity(question)
 	prop = []
 	answer_found = 0
-	print(entity)
 	if not entity: # if entity is empty, cannot find answer
 		return 0
 	paramsQ['search'] = " ".join(entity)
@@ -321,10 +327,8 @@ def create_and_fire_query(question, question_type):
 			
 		if not prop: # if property is empty, cannot find answer
 			return 0
-		print(prop)
 		paramsP['search'] = " ".join(prop)
 		json = requests.get(url, paramsP).json()
-		#print(json['search'])
 		for result in json['search']:
 			p_id = format(result['id'])
 			query = create_query(p_id, q_id)
@@ -340,8 +344,8 @@ def create_and_fire_query(question, question_type):
 	
 
 def QA(line): 
-	for token in line:
-		print("\t".join((token.text, token.lemma_, token.pos_, token.tag_, token.dep_, token.head.lemma_)))
+	#for token in line:
+	#	print("\t".join((token.text, token.lemma_, token.pos_, token.tag_, token.dep_, token.head.lemma_)))
 
 	yes_words = ["can","be", "do"]
 	h_words = ["how"]
@@ -352,25 +356,25 @@ def QA(line):
 	
 	
 	if line[0].lemma_ in yes_words:
-		print('Yes or No question')
+		#print('Yes or No question')
 		return YesOrNoQuestion(line) #yes or no question 
 	else:
 		for token in line:
 			if token.lemma_ in state_words and token.pos_ != "PROPN":
-				print('State question')
+				#print('State question')
 				return create_and_fire_query(line, 2) # state the X of Y
 			elif token.lemma_ in wh_det_words:
-				print('Wh determiner question')
+				#print('Wh determiner question')
 				return create_and_fire_query(line, 3) # which city is the X of Y
 			elif token.lemma_ in wh_prn_words:
-				print('Wh pronoun question')
+				#print('Wh pronoun question')
 				return create_and_fire_query(line, 4) # where is the X of Y
 			elif token.lemma_ in h_words:
 				if token.head.lemma_ == "many":
-					print('Count question')
+					#print('Count question')
 					return create_and_fire_query(line, 5)
 				else:
-					print('How question')
+					#print('How question')
 					return create_and_fire_query(line, 6)
 	
 			
@@ -394,10 +398,15 @@ def main(argv):
 	for line in sys.stdin:
 		line = line.rstrip()
 		nlp = spacy.load('en')
-		if QA(nlp(line)) == 0:
+		question = line.split()
+		question_number = find_question_number(question)
+		question = " ".join(question)
+		if question_number:
+			print(question_number, end = '\t')
+		if QA(nlp(question)) == 0:
 			print("We could not find the answer")
-		print("Ask another question.")
+		#print("Ask another question.")
 
 
-if __name__ == "__main__":
-	main(sys.argv)
+if __name__ == '__main__':
+    main(sys.argv)
